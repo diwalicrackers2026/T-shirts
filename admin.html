@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Admin | Farside Paris</title>
+<script src="config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jost:wght@400;500;600&family=Playfair+Display:wght@500;600;700&display=swap">
+<style>
+:root{--ink:#4A2543;--pri:#6B3F63;--paper:#FFF9F2;--mist:#F0DECB;--grey:#7E6678}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:16px/1.5 Arial,Helvetica,sans-serif;background:linear-gradient(180deg,#F1E4F4 0,#FFF3E6 480px) no-repeat,#FFF3E6;color:#171717}
+header{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;padding:.7rem 1rem;background:rgba(241,228,244,.92);backdrop-filter:blur(8px);border-bottom:1px solid #E3CFE8}
+header b{font-size:1.3rem;letter-spacing:.09em;color:var(--pri)}
+main{max-width:760px;margin:0 auto;padding:1rem}
+h2{color:var(--ink);letter-spacing:-.03em}
+.btn{border:0;border-radius:999px;background:var(--pri);color:#fff;padding:.55rem 1.1rem;font:600 .85rem Arial,sans-serif;cursor:pointer}
+.btn.alt,.tabs .btn:not(.on){background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--ink)}
+.btn[disabled]{opacity:.5}
+.tabs{display:flex;gap:.5rem;margin-bottom:1rem}
+.card{display:grid;gap:.5rem;background:var(--paper);border-radius:14px;box-shadow:0 4px 14px rgba(74,37,67,.14);padding:1rem;margin-bottom:.8rem}
+.row{display:flex;gap:.5rem;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.row select,.row input{width:auto;flex:1 1 130px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+label{display:grid;gap:.25rem;font-weight:600;font-size:.88rem}
+input,select,textarea{font:inherit;width:100%;border:1.5px solid var(--mist);border-radius:8px;padding:.55rem .7rem;background:#fff}
+input:focus,select:focus,textarea:focus{border-color:var(--ink);outline:0}
+.mut{color:var(--grey);font-size:.88rem}.err{color:#b3261e}
+.thumb{width:56px;aspect-ratio:4/5;object-fit:cover;border-radius:8px;background:var(--mist)}
+.toast{position:fixed;left:50%;bottom:1.2rem;transform:translate(-50%,20px);background:var(--pri);color:#fff;padding:.7rem 1.2rem;border-radius:999px;opacity:0;pointer-events:none;transition:.2s;max-width:90vw;text-align:center}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* Farside Paris look */
+body{font:16px/1.5 'Jost',system-ui,sans-serif;background:#FFF9F2}
+header{background:rgba(255,249,242,.95);border-bottom:1px solid #EAD9C6}
+header b{font-family:'Playfair Display',Georgia,serif;font-weight:600;letter-spacing:.16em;color:var(--ink);font-size:1.25rem}
+header .adm{font:600 .68rem 'Jost',sans-serif;letter-spacing:.22em;text-transform:uppercase;color:var(--grey);margin-left:.6rem}
+h2{font-family:'Playfair Display',Georgia,serif;font-weight:600;letter-spacing:0}
+.btn{border-radius:0;font:600 .72rem 'Jost',sans-serif;letter-spacing:.16em;text-transform:uppercase;padding:.7rem 1.2rem}
+.card{border-radius:0;box-shadow:none;border:1px solid #EAD9C6}
+input,select,textarea{border-radius:0;font-family:inherit}
+.thumb{border-radius:0}
+.toast{border-radius:0;background:var(--ink)}
+</style>
+</head>
+<body>
+<header><b>FARSIDE PARIS <span class="adm">Admin</span></b><span id="hb"></span></header>
+<main id="app"></main>
+<div class="toast" id="toast" role="status"></div>
+<script>
+const API = (window.STORE || {}).API_URL, $ = s => document.querySelector(s), app = $('#app');
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ST = ['New', 'Packed', 'Shipped', 'Delivered', 'Cancelled'];
+const FIELDS = [['name', 'Name'], ['category', 'Category (e.g. Loose tees)'], ['gender', 'For', ['men', 'women', 'accessories']], ['status', 'Status', ['active', 'hidden']], ['price', 'Price ₹', 'number'], ['mrp', 'MRP ₹ (crossed-out price)', 'number'], ['gsm', 'GSM (fabric weight, shown in product details)', 'number'], ['stock', 'Stock (blank = unlimited)', 'number'], ['fit', 'Fit'], ['colors', 'Colours, comma separated'], ['sizes', 'Sizes, comma separated'], ['chart', 'Size chart name (optional)']];
+let key = sessionStorage.getItem('akey') || '', data, tab = 'orders', edit = null;
+const toast = m => { const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2800); };
+async function call(action, d = {}) {
+  const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, key, ...d }) });
+  const j = await r.json(); if (!j.ok) throw new Error(j.error); return j;
+}
+const fld = ([k, l, t], v) => `<label>${l}${Array.isArray(t)
+  ? `<select id="f-${k}">${t.map(o => `<option${o === String(v ?? '').toLowerCase() ? ' selected' : ''}>${o}</option>`).join('')}</select>`
+  : `<input id="f-${k}" type="${t || 'text'}" step="any" value="${esc(v)}">`}</label>`;
+const prodForm = p => `<form class="card" id="pf"><input type="hidden" id="f-id" value="${esc(p.id)}"><h2>${p.id ? 'Edit' : 'New'} product</h2>
+  <div class="two">${FIELDS.map(f => fld(f, p[f[0]])).join('')}</div>
+  <label>Description<textarea id="f-description" rows="3">${esc(p.description)}</textarea></label>
+  <label>Photo links, one per line<textarea id="f-images" rows="3">${esc(String(p.images || '').split(/[\n,]+/).map(x => x.trim()).filter(Boolean).join('\n'))}</textarea></label>
+  <label>Upload photos<input type="file" id="up" accept="image/*" multiple></label>
+  <div class="mut" id="upMsg">The first photo is the cover. Press Save product after uploading.</div>
+  <div class="row"><button class="btn" type="submit">Save product</button><button class="btn alt" type="button" id="pcancel">Cancel</button></div></form>`;
+
+function login(msg) {
+  $('#hb').innerHTML = '';
+  app.innerHTML = `<form class="card" id="lf"><h2>Owner sign in</h2><label>Admin key<input id="k" type="password" autocomplete="current-password" required></label><div class="err">${esc(msg || '')}</div><button class="btn">Sign in</button></form>`;
+  $('#lf').onsubmit = e => { e.preventDefault(); key = $('#k').value; load(); };
+}
+async function load() {
+  if (!API || /^PASTE/.test(API)) { app.innerHTML = '<div class="card">Set API_URL in config.js first.</div>'; return; }
+  try { data = await call('adminList'); sessionStorage.setItem('akey', key); show(); }
+  catch (e) { sessionStorage.removeItem('akey'); login(e.message); }
+}
+function show() {
+  $('#hb').innerHTML = '<button class="btn alt" id="dl">Download Excel</button> <button class="btn alt" id="so">Sign out</button>';
+  $('#dl').onclick = csv; $('#so').onclick = () => { sessionStorage.removeItem('akey'); key = ''; login(); };
+  const n = data.orders.filter(o => o.status === 'New').length;
+  app.innerHTML = `<div class="tabs"><button class="btn${tab === 'orders' ? ' on' : ''}" data-tab="orders">Orders${n ? ` (${n} new)` : ''}</button><button class="btn${tab === 'products' ? ' on' : ''}" data-tab="products">Products</button><button class="btn${tab === 'charts' ? ' on' : ''}" data-tab="charts">Size charts</button></div>` + (tab === 'orders' ? orders() : tab === 'charts' ? charts() : products());
+}
+function orders() {
+  return data.orders.map(o => `<div class="card"><div class="row"><b>${esc(o.orderId)}</b><span class="mut">${new Date(o.date).toLocaleString('en-IN')}</span></div>
+    <div>${esc(o.name)} · <a href="tel:${esc(o.phone)}">${esc(o.phone)}</a>${o.email ? ' · ' + esc(o.email) : ''}</div>
+    <div class="mut">${esc(o.address)} - ${esc(o.pincode)}</div><div>${esc(o.summary)}</div>
+    <div><b>₹${esc(o.total)}</b> · ${esc(o.payment)}${o.coupon ? ` · ${esc(o.coupon)} (−₹${esc(o.discount)})` : ''}</div>
+    <div class="row"><select id="s-${esc(o.orderId)}">${ST.map(s => `<option${s === o.status ? ' selected' : ''}>${s}</option>`).join('')}</select><input id="t-${esc(o.orderId)}" placeholder="Courier / tracking note" value="${esc(o.tracking)}"><button class="btn" data-save="${esc(o.orderId)}">Save</button></div></div>`).join('') || '<p class="mut">No orders yet.</p>';
+}
+function products() {
+  if (edit) return prodForm(edit);
+  return '<p><button class="btn" data-edit="">+ Add product</button></p><br>' + data.products.map(p => {
+    const im = String(p.images || '').split(/[\n,]+/)[0].trim();
+    return `<div class="card"><div class="row"><div class="row">${im ? `<img class="thumb" src="${esc(im)}" alt="">` : ''}<div><b>${esc(p.name)}</b><div class="mut">₹${esc(p.price)} · ${p.stock === '' || p.stock == null ? 'unlimited stock' : 'stock ' + esc(p.stock)} · ${esc(p.status || 'active')}</div></div></div><button class="btn alt" data-edit="${esc(p.id)}">Edit</button></div></div>`;
+  }).join('');
+}
+function charts() {
+  const one = (n, t) => `<div class="card"><label>Chart name<input class="cn" value="${esc(n)}" ${n ? 'readonly' : 'placeholder="e.g. Loose tees"'}></label><label>Sizes table<textarea class="ct" rows="7">${esc(t)}</textarea></label><button class="btn" data-chart>Save chart</button></div>`;
+  return `<p class="mut">First line is the headings, then one size per line. Use commas, or paste straight from Excel. A chart named like a product category (e.g. Loose tees) shows on those products automatically, or type its name in the product's Size chart field. A chart named Default is used when nothing else matches. Clear the table and Save to delete a chart.</p><br>`
+    + Object.keys(data.charts || {}).map(n => one(n, data.charts[n])).join('') + `<h2>Add a chart</h2><br>` + one('', 'Size, Chest (in), Length (in)\nS, , \nM, , ');
+}
+function csv() {
+  const cols = ['orderId', 'date', 'name', 'phone', 'email', 'address', 'pincode', 'summary', 'subtotal', 'shipping', 'discount', 'coupon', 'total', 'payment', 'paymentId', 'status', 'tracking'];
+  const q = v => { v = String(v ?? ''); if (/^[=+\-@]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; };
+  const t = [cols.join(',')].concat(data.orders.map(o => cols.map(c => q(o[c])).join(','))).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['\ufeff' + t], { type: 'text/csv' }));
+  a.download = 'orders-' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
+}
+function shrink(f) {
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => { const r = Math.min(1, 1100 / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.round(im.width * r); c.height = Math.round(im.height * r); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', .82)); };
+    im.onerror = () => rej(new Error('Could not read that image.')); im.src = URL.createObjectURL(f);
+  });
+}
+const refresh = async () => { data = await call('adminList'); show(); };
+app.addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.tab) { tab = b.dataset.tab; edit = null; return show(); }
+  if (b.dataset.edit !== undefined) { edit = b.dataset.edit ? data.products.find(p => String(p.id) === b.dataset.edit) : {}; return show(); }
+  if (b.id === 'pcancel') { edit = null; return show(); }
+  if (b.dataset.chart !== undefined) {
+    const c = b.closest('.card'), name = c.querySelector('.cn').value.trim(), table = c.querySelector('.ct').value; b.disabled = true;
+    try { await call('adminSaveChart', { name, table }); toast(table.trim() ? 'Chart saved' : 'Chart deleted'); await refresh(); } catch (x) { toast(x.message); b.disabled = false; }
+    return;
+  }
+  if (b.dataset.save) {
+    const id = b.dataset.save, status = $('#s-' + id).value, tracking = $('#t-' + id).value; b.disabled = true;
+    try { await call('adminSetStatus', { orderId: id, status, tracking }); Object.assign(data.orders.find(o => o.orderId === id), { status, tracking }); toast('Saved. Customer emailed if they gave an email.'); }
+    catch (x) { toast(x.message); }
+    b.disabled = false;
+  }
+});
+app.addEventListener('submit', async e => {
+  if (e.target.id !== 'pf') return; e.preventDefault();
+  const p = { id: $('#f-id').value, description: $('#f-description').value, images: $('#f-images').value };
+  FIELDS.forEach(([k]) => p[k] = $('#f-' + k).value);
+  try { await call('adminSaveProduct', { product: p }); toast('Product saved'); edit = null; await refresh(); } catch (x) { toast(x.message); }
+});
+app.addEventListener('change', async e => {
+  if (e.target.id !== 'up') return;
+  const m = $('#upMsg'), ta = $('#f-images');
+  for (const f of e.target.files) {
+    try { m.textContent = 'Uploading ' + f.name + '...'; const j = await call('adminUpload', { data: await shrink(f) }); ta.value += (ta.value ? '\n' : '') + j.url; m.textContent = 'Uploaded. Press Save product to keep it.'; }
+    catch (x) { m.textContent = x.message; }
+  }
+  e.target.value = '';
+});
+key ? load() : login();
+</script>
+</body>
+</html>
